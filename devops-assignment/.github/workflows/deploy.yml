@@ -1,0 +1,34 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push service-a
+        run: |
+          docker build -t myorg/service-a:${{ github.sha }} ./service-a
+          docker push myorg/service-a:${{ github.sha }}
+
+      - name: Build and push service-b
+        run: |
+          docker build -t myorg/service-b:${{ github.sha }} ./service-b
+          docker push myorg/service-b:${{ github.sha }}
+
+      - name: Deploy to server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=accept-new deploy@${{ secrets.DEPLOY_HOST }} \
+            "docker pull myorg/service-a:${{ github.sha }} && docker restart service-a"
